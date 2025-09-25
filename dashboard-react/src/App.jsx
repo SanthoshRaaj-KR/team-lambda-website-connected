@@ -36,7 +36,7 @@ const GlobalStyles = () => {
 
 
 // Displays a bi-directional sensor bar, ideal for accelerometer/gyroscope data.
-const SensorBar = React.memo(({ label, value, color, max = 15 }) => {
+const SensorBar = React.memo(({ label, value, color, max = 10 }) => {
   const percentage = Math.min(100, (Math.abs(value) / max) * 100);
   const barColor = color === 'blue' ? 'bg-blue-500' : 'bg-green-500';
   const shadowColor = color === 'blue' ? 'shadow-blue-500/30' : 'shadow-green-500/30';
@@ -60,11 +60,11 @@ const SensorBar = React.memo(({ label, value, color, max = 15 }) => {
   );
 });
 
-// Renders a semi-circular gauge for displaying distance or other metrics.
-const SemiCircleGauge = React.memo(({ label, value, colorClass = "stroke-blue-500" }) => {
+
+const SemiCircleGauge = React.memo(({ label, value, max = 500, colorClass = "stroke-blue-500" }) => {
     const radius = 45;
     const circumference = Math.PI * radius;
-    const percentage = Math.min(100, (value / 200) * 100);
+    const percentage = Math.min(100, (value / max) * 100); // <-- use max
     const offset = circumference - (percentage / 100) * circumference;
 
     return (
@@ -90,12 +90,12 @@ const SemiCircleGauge = React.memo(({ label, value, colorClass = "stroke-blue-50
                         className="fill-slate-800 font-bold sm:text-base md:text-lg"
                     >
                         {value?.toFixed(0)}
-                          <tspan
+                        <tspan
                             className="fill-slate-500 font-semibold text-[8px] sm:text-[10px]"
                             dx="2" dy="-4"
-                          >
+                        >
                             cm
-                          </tspan>
+                        </tspan>
                     </text>
                 </svg>
             </div>
@@ -103,6 +103,7 @@ const SemiCircleGauge = React.memo(({ label, value, colorClass = "stroke-blue-50
         </div>
     );
 });
+
 
 // A card for displaying key bot vitals like motor status or signal strength.
 const VitalsCard = React.memo(({ icon: Icon, color, title, value, className = '' }) => {
@@ -164,7 +165,7 @@ const SolarBotDashboard = () => {
       const response = await fetch('http://localhost:8000/getData');
       if (!response.ok) throw new Error(`Network error ${response.statusText}`);
       const result = await response.json();
-
+      console.log(result);
       if (result.data) {
           const parsed = parseApiData(result.data);
           setBotData(prev => ({
