@@ -20,6 +20,10 @@ const GlobalStyles = () => {
       .animate-pulse-alert {
         animation: pulse-alert 1.5s ease-in-out infinite;
       }
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
     `;
     document.head.appendChild(style);
     return () => { document.head.removeChild(style); };
@@ -60,7 +64,8 @@ const SensorBar = React.memo(({ label, value, color, max = 15 }) => {
 const SemiCircleGauge = React.memo(({ label, value, colorClass = "stroke-cyan-400" }) => {
     const radius = 45;
     const circumference = Math.PI * radius;
-    // Assuming a max value of 200 for the gauge display
+    // Assuming a max value of 200 for the gauge display.
+    // We clamp the visual percentage at 100% to prevent the gauge from over-filling awkwardly.
     const percentage = Math.min(100, (value / 200) * 100);
     const offset = circumference - (percentage / 100) * circumference;
 
@@ -88,7 +93,13 @@ const SemiCircleGauge = React.memo(({ label, value, colorClass = "stroke-cyan-40
                         x="50" y="50" textAnchor="middle"
                         className="fill-white font-bold sm:text-base md:text-lg"
                     >
-                        {value?.toFixed(0)}cm
+                        {value?.toFixed(0)}
+                          <tspan
+                            className="fill-white font-bold text-[8px] sm:text-[10px]"
+                            dx="2" dy="-4"
+                          >
+                            cm
+                          </tspan>
                     </text>
                 </svg>
             </div>
@@ -135,6 +146,7 @@ const SolarBotDashboard = () => {
     accelerometer: { x: 0, y: 0, z: 0 }, gyroscope: { x: 0, y: 0, z: 0 },
     flags: { drive: 0, brush: 0, disoriented: 0 }, errors: [],
   });
+  const [isLoading, setIsLoading] = useState(true);
 
   // Effect to update current time every second
   useEffect(() => {
@@ -179,26 +191,29 @@ const SolarBotDashboard = () => {
 
     } catch (err) {
       setBotData(prev => ({ ...prev, isConnected: false, isActive: false, errors: [`API Error: ${err.message}`] }));
+    } finally {
+        // Stop loading after the first attempt, success or fail.
+        if (isLoading) {
+            setIsLoading(false);
+        }
     }
-  }, [parseApiData]);
+  }, [parseApiData, isLoading]);
 
-  // Effect to simulate cleaning progress when the bot is active
+  // Effect to simulate cleaning progress when the bot is active. Loops automatically.
   useEffect(() => {
     let progressInterval;
     if (botData.isConnected && botData.isActive) {
       progressInterval = setInterval(() => {
         setBotData(prev => {
           const newPercentage = prev.cleaningPercentage + 1;
-          if (newPercentage >= 100) {
-            clearInterval(progressInterval);
-            return { ...prev, cleaningPercentage: 100 };
-          }
-          return { ...prev, cleaningPercentage: newPercentage };
+          // When the percentage exceeds 100, reset to 0 to create a loop.
+          // This allows the UI to display 100% momentarily before restarting.
+          return { ...prev, cleaningPercentage: newPercentage > 100 ? 0 : newPercentage };
         });
       }, 750);
-    } else if (!botData.isActive && botData.cleaningPercentage > 0 && botData.cleaningPercentage < 100) {
-       // Optional: reset progress if bot becomes idle. Or leave as is.
     }
+    // Cleanup: The interval is automatically cleared when the bot becomes inactive or disconnects,
+    // because the useEffect hook will re-run and this cleanup function will be called.
     return () => clearInterval(progressInterval);
   }, [botData.isConnected, botData.isActive]);
 
@@ -218,16 +233,31 @@ const SolarBotDashboard = () => {
   const circumference = 2 * Math.PI * 120;
   const progressOffset = circumference - (botData.cleaningPercentage / 100) * circumference;
 
+  if (isLoading) {
+    return (
+      <>
+        <GlobalStyles />
+        <div className="h-screen w-screen flex flex-col items-center justify-center bg-black text-white" role="status">
+            <svg aria-hidden="true" className="w-10 h-10 text-gray-600 animate-spin fill-cyan-500" viewBox="0 0 100 101" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M100 50.5908C100 78.2051 77.6142 100.591 50 100.591C22.3858 100.591 0 78.2051 0 50.5908C0 22.9766 22.3858 0.59082 50 0.59082C77.6142 0.59082 100 22.9766 100 50.5908ZM9.08144 50.5908C9.08144 73.1895 27.4013 91.5094 50 91.5094C72.5987 91.5094 90.9186 73.1895 90.9186 50.5908C90.9186 27.9921 72.5987 9.67226 50 9.67226C27.4013 9.67226 9.08144 27.9921 9.08144 50.5908Z" fill="currentColor"/>
+                <path d="M93.9676 39.0409C96.393 38.4038 97.8624 35.9116 97.0079 33.5539C95.2932 28.8227 92.871 24.3692 89.8167 20.348C85.8452 15.1192 80.8826 10.7238 75.2124 7.41289C69.5422 4.10194 63.2754 1.94025 56.7698 1.05124C51.7666 0.367541 46.6976 0.446843 41.7345 1.27873C39.2613 1.69328 37.813 4.19778 38.4501 6.62326C39.0873 9.04874 41.5694 10.4717 44.0505 10.1071C47.8511 9.54855 51.7191 9.52689 55.5402 10.0492C60.8642 10.7766 65.9928 12.5457 70.6331 15.2552C75.2735 17.9648 79.3347 21.5619 82.5849 25.841C84.9175 28.9121 86.7997 32.2913 88.1811 35.8758C89.083 38.2158 91.5421 39.6781 93.9676 39.0409Z" fill="currentFill"/>
+            </svg>
+            <p className="text-lg font-semibold mt-4 tracking-wider">CONNECTING TO SOLAR BOT...</p>
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       <GlobalStyles />
       {/* Root Container: Enforces full screen height and width, with a flex column layout. overflow-hidden prevents scrollbars. */}
-      <div className="h-screen w-screen overflow-hidden flex flex-col bg-black bg-gradient-to-br from-black via-gray-900/30 to-black p-2 sm:p-3 md:p-4 text-white">
+      <div className="h-screen w-screen flex flex-col bg-black bg-gradient-to-br from-black via-gray-900/30 to-black p-2 sm:p-3 md:p-4 text-white">
         
         {/* HEADER */}
         <header className="bg-black/60 backdrop-blur-sm rounded-2xl p-2 sm:p-3 shadow-lg border border-white/10 flex flex-col md:flex-row items-center justify-between gap-2 mb-3 sm:mb-4">
           <div className="flex items-center space-x-3 sm:space-x-4">
-            <img src="/my-logo.png" alt="Solar Bot Logo" className="w-8 h-8 sm:w-10 sm:h-10 object-contain"/>
+            <img src="my-logo.png" alt="Solar Bot Logo" className="w-8 h-8 sm:w-10 sm:h-10 object-contain"/>
             <div>
               <h1 className="text-md sm:text-lg md:text-xl font-bold tracking-wider">SOLAR BOT</h1>
               <p className="text-xs sm:text-sm text-gray-400">Autonomous Cleaning System</p>
@@ -248,8 +278,33 @@ const SolarBotDashboard = () => {
         <main className="flex-1 min-h-0 flex flex-col lg:flex-row gap-3 sm:gap-4">
           
           {/* LEFT COLUMN */}
-          <section className="lg:w-1/3 lg:max-w-sm flex flex-col gap-3 sm:gap-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-3 sm:gap-4">
+          <section className="lg:w-2/5 xl:w-1/3 flex flex-col gap-3 sm:gap-4">
+            {/* --- CLEANING PROGRESS --- */}
+            <div className="bg-black/60 backdrop-blur-sm rounded-2xl p-3 sm:p-4 border border-white/10 text-center flex flex-col justify-center items-center flex-1 min-h-0">
+              <h2 className="text-sm sm:text-base md:text-lg font-bold mb-2">CLEANING PROGRESS</h2>
+              <div className="relative w-2/3 max-w-[280px] aspect-square mx-auto mb-2">
+                  <svg className="w-full h-full transform -rotate-90" viewBox="0 0 300 300">
+                      <circle cx="150" cy="150" r="120" stroke="rgba(55, 65, 81, 0.5)" strokeWidth="20" fill="none"/>
+                      <circle cx="150" cy="150" r="120" stroke="url(#progressGradient)" strokeWidth="20" fill="none" strokeLinecap="round" style={{ strokeDasharray: circumference, strokeDashoffset: progressOffset, transition: 'stroke-dashoffset 0.5s linear' }}/>
+                      <defs>
+                          <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                              <stop offset="0%" stopColor="#3B82F6" />
+                              <stop offset="50%" stopColor="#8B5CF6" />
+                              <stop offset="100%" stopColor="#EC4899" />
+                          </linearGradient>
+                      </defs>
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <div className="text-4xl sm:text-5xl lg:text-6xl font-bold">{botData.cleaningPercentage}%</div>
+                      <div className="text-[10px] sm:text-xs tracking-widest">COMPLETE</div>
+                  </div>
+              </div>
+              <div className="text-xs sm:text-sm font-semibold text-gray-300">
+                STATUS: {botData.isActive ? <span className="text-green-400">● ACTIVE</span> : <span className="text-orange-400">● IDLE</span>}
+              </div>
+            </div>
+            {/* --- VITALS --- */}
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
               <VitalsCard icon={Zap} color="cyan" title="DRIVE MOTOR" value={botData.flags.drive ? 'ACTIVE' : 'IDLE'} />
               <VitalsCard icon={Activity} color="lime" title="BRUSH MOTOR" value={botData.flags.brush ? 'SPINNING' : 'STOPPED'} />
               <VitalsCard icon={Bot} color={botData.flags.disoriented ? "red" : "green"} title="ORIENTATION" value={botData.flags.disoriented ? 'LOST' : 'NORMAL'} className={botData.flags.disoriented ? 'animate-pulse-alert' : ''} />
@@ -261,38 +316,13 @@ const SolarBotDashboard = () => {
           {/* flex-1 allows this column to take remaining horizontal space. min-w-0 allows it to shrink below its content's default width. */}
           <section className="flex-1 flex flex-col gap-3 sm:gap-4 min-w-0">
             
-            {/* Top-Right Section (Progress & Gauges) */}
-            <div className="flex flex-col lg:flex-row gap-3 sm:gap-4">
-              <div className="bg-black/60 backdrop-blur-sm rounded-2xl p-3 sm:p-4 border border-white/10 text-center flex flex-col justify-center items-center lg:flex-1">
-                <h2 className="text-sm sm:text-base md:text-lg font-bold mb-2">CLEANING PROGRESS</h2>
-                <div className="relative w-28 h-28 sm:w-32 sm:h-32 mx-auto mb-2">
-                    <svg className="w-full h-full transform -rotate-90" viewBox="0 0 300 300">
-                        <circle cx="150" cy="150" r="120" stroke="rgba(55, 65, 81, 0.5)" strokeWidth="20" fill="none"/>
-                        <circle cx="150" cy="150" r="120" stroke="url(#progressGradient)" strokeWidth="20" fill="none" strokeLinecap="round" style={{ strokeDasharray: circumference, strokeDashoffset: progressOffset, transition: 'stroke-dashoffset 0.5s linear' }}/>
-                        <defs>
-                            <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                                <stop offset="0%" stopColor="#3B82F6" />
-                                <stop offset="50%" stopColor="#8B5CF6" />
-                                <stop offset="100%" stopColor="#EC4899" />
-                            </linearGradient>
-                        </defs>
-                    </svg>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <div className="text-2xl sm:text-3xl font-bold">{botData.cleaningPercentage}%</div>
-                        <div className="text-[10px] sm:text-xs tracking-widest">COMPLETE</div>
-                    </div>
-                </div>
-                <div className="text-xs sm:text-sm font-semibold text-gray-300">
-                  STATUS: {botData.isActive ? <span className="text-green-400">● ACTIVE</span> : <span className="text-orange-400">● IDLE</span>}
-                </div>
-              </div>
-              <div className='lg:flex-1 flex flex-col gap-3 sm:gap-4 min-w-0'>
+            {/* --- DISTANCE SENSORS --- */}
+            <div className='grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4'>
                 <SemiCircleGauge label="Distance TOF1" value={botData.distance.t1} colorClass="stroke-cyan-400" />
                 <SemiCircleGauge label="Distance TOF2" value={botData.distance.t2} colorClass="stroke-lime-400" />
-              </div>
             </div>
 
-            {/* Bottom-Right Section (Sensor Data) */}
+            {/* --- LIVE SENSOR DATA --- */}
             {/* flex-1 allows this section to take up all remaining vertical space in the right column. */}
             <div className="bg-black/60 backdrop-blur-sm rounded-2xl p-2 sm:p-3 md:p-4 border border-white/10 flex-1 flex flex-col min-h-0">
               <h2 className="text-sm sm:text-base md:text-lg font-bold mb-3 text-center">LIVE SENSOR DATA</h2>
@@ -316,7 +346,7 @@ const SolarBotDashboard = () => {
 
         {/* System Alert Overlay */}
         {botData.errors.length > 0 && (
-          <div className="fixed bottom-4 sm:bottom-6 left-4 right-4 sm:left-6 sm:right-6 z-50">
+          <div className="fixed bottom-4 sm:bottom-6 right-4 sm:right-6 z-50 w-full max-w-xs sm:max-w-sm">
             <div className="bg-red-600/80 backdrop-blur-sm border-2 border-red-400 rounded-xl p-3 sm:p-4 shadow-2xl">
               <div className="flex items-center">
                 <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-white mr-2 sm:mr-3" />
@@ -334,3 +364,9 @@ const SolarBotDashboard = () => {
 };
 
 export default SolarBotDashboard;
+
+
+
+
+
+

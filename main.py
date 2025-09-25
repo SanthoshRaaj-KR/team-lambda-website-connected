@@ -17,7 +17,7 @@ app.add_middleware(
 def get_data():
     try:
         # 🔹 Uncomment and set correct endpoint
-        response = requests.get("http://10.29.118.218/getData", timeout=2)
+        response = requests.get("http://10.29.118.218/getData", timeout=1)
         result = response.json()
         if result:
              return result
@@ -27,6 +27,6 @@ def get_data():
 
     # fallback
     return {
-        "data": "TOF1:25.5,TOF2:15.75,ACCX:0.5,ACCY:-0.2,ACCZ:9.81,GYRX:0.17,GYRY:-0.65,GYRZ:0.22,DRIVE:1,BRUSH:0,DISORIENTED:0",
-        "rssi": -75
+        "data": "TOF1:2502.5,TOF2:1501.75,ACCX:0.5,ACCY:-0.2,ACCZ:9.81,GYRX:0.17,GYRY:-0.65,GYRZ:0.22,DRIVE:1,BRUSH:0,DISORIENTED:0",
+        "rssi": -119
     }
