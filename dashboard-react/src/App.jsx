@@ -168,21 +168,22 @@ const SolarBotDashboard = () => {
       console.log(result);
       if (result.data) {
           const parsed = parseApiData(result.data);
+
           setBotData(prev => ({
-            ...prev, isConnected: true,
-            isActive: parsed.DRIVE === 1,
-            distance: { t1: parsed.TOF1 ?? prev.distance.t1, t2: parsed.TOF2 ?? prev.distance.t2 },
-            accelerometer: { x: parsed.ACCX ?? prev.accelerometer.x, y: parsed.ACCY ?? prev.accelerometer.y, z: parsed.ACCZ ?? prev.accelerometer.z },
-            gyroscope: { x: parsed.GYRX ?? prev.gyroscope.x, y: parsed.GYRY ?? prev.gyroscope.y, z: parsed.GYRZ ?? prev.gyroscope.z },
-            flags: {
-                drive: parsed.DRIVE ?? prev.flags.drive,
-                brush: parsed.BRUSH ?? prev.flags.brush,
-                disoriented: parsed.DISORIENTED ?? prev.flags.disoriented,
-            },
-            rssi: result.rssi ?? prev.rssi,
-            errors: parsed.DISORIENTED ? ["Warning: Bot may be disoriented."] : [],
+              ...prev,
+              isConnected: true,
+              isActive: parsed.DRIVE === 1,
+              // Keep current progress, but sync with API if it's higher
+              cleaningPercentage: Math.max(prev.cleaningPercentage, parsed.CLEAN_PERCENT || 0), 
+              distance: { t1: parsed.TOF1 ?? prev.distance.t1, t2: parsed.TOF2 ?? prev.distance.t2 },
+              accelerometer: { x: parsed.ACCX ?? prev.accelerometer.x, y: parsed.ACCY ?? prev.accelerometer.y, z: parsed.ACCZ ?? prev.accelerometer.z },
+              gyroscope: { x: parsed.GYRX ?? prev.gyroscope.x, y: parsed.GYRY ?? prev.gyroscope.y, z: parsed.GYRZ ?? prev.gyroscope.z },
+              flags: { drive: parsed.DRIVE ?? prev.flags.drive, brush: parsed.BRUSH ?? prev.flags.brush, disoriented: parsed.DISORIENTED ?? prev.flags.disoriented },
+              rssi: result.rssi ?? prev.rssi,
+              errors: parsed.DISORIENTED ? ["Warning: Bot may be disoriented."] : [],
           }));
       }
+
 
     } catch (err) {
       setBotData(prev => ({ ...prev, isConnected: false, isActive: false, errors: [`API Error: ${err.message}`] }));
@@ -194,18 +195,18 @@ const SolarBotDashboard = () => {
   }, [isLoading]);
 
   // Effect for cleaning progress simulation
-  useEffect(() => {
-    let progressInterval;
-    if (botData.isConnected && botData.isActive) {
-      progressInterval = setInterval(() => {
-        setBotData(prev => {
-          const newPercentage = prev.cleaningPercentage + 1;
-          return { ...prev, cleaningPercentage: newPercentage > 100 ? 0 : newPercentage };
-        });
-      }, 750);
-    }
-    return () => clearInterval(progressInterval);
-  }, [botData.isConnected, botData.isActive]);
+useEffect(() => {
+  const progressInterval = setInterval(() => {
+    setBotData(prev => {
+      const newPercentage = prev.cleaningPercentage + 1;
+      return { ...prev, cleaningPercentage: newPercentage > 100 ? 0 : newPercentage };
+    });
+  }, 750);
+
+  return () => clearInterval(progressInterval);
+}, []);
+
+
 
 
   // Effect to fetch data periodically
